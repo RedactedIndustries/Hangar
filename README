@@ -1,15 +1,15 @@
 <div align="center">
 
-```
+<pre>
 ██╗  ██╗ █████╗ ███╗   ██╗ ██████╗  █████╗ ██████╗
 ██║  ██║██╔══██╗████╗  ██║██╔════╝ ██╔══██╗██╔══██╗
 ███████║███████║██╔██╗ ██║██║  ███╗███████║██████╔╝
 ██╔══██║██╔══██║██║╚██╗██║██║   ██║██╔══██║██╔══██╗
 ██║  ██║██║  ██║██║ ╚████║╚██████╔╝██║  ██║██║  ██║
 ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
-```
+</pre>
 
-### Preflight your drone dev environment.
+<h3>Preflight your drone dev environment.</h3>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Bash](https://img.shields.io/badge/shell-bash-1f425f.svg)](https://www.gnu.org/software/bash/)
