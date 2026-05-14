@@ -15,37 +15,35 @@
 [![Bash](https://img.shields.io/badge/shell-bash-1f425f.svg)](https://www.gnu.org/software/bash/)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04%20LTS-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/24.04/)
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04%20LTS-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
-[![ShellCheck](https://img.shields.io/badge/shellcheck-passing-brightgreen)](https://www.shellcheck.net/)
-[![Version](https://img.shields.io/badge/version-0.2.1-blue)](#changelog)
 
 </div>
 
 ---
 
-**Hangar** is an idempotent, menu-driven installer that sets up a complete drone autonomy development workstation on Ubuntu in a single command. One script gets you from a fresh ISO to flying a simulated drone in SITL with a full Python autonomy stack ready to develop against.
+**Hangar** is a menu-driven installer that turns a fresh Ubuntu install into a complete drone autonomy development environment in one command. From a clean ISO to flying a simulated drone in SITL with a working Python autonomy stack — typically 30–60 minutes, mostly unattended.
 
 ## What it installs
 
 - **System base** — apt updates, build essentials, kernel headers
-- **VM guest tools** — auto-detects VMware/VirtualBox/Hyper-V/KVM
+- **VM guest tools** — auto-detects VMware, VirtualBox, Hyper-V, or KVM
 - **Developer tools** — git, vim, htop, tmux, python3 + venv, ssh, rsync
-- **Visual Studio Code** — from Microsoft's apt repo + Python/Ruff/YAML/TOML/GitLens extensions
+- **Visual Studio Code** — with Python, Ruff, YAML, TOML, and GitLens extensions
 - **QGroundControl** — AppImage + Qt runtime deps + desktop launcher
-- **Mission Planner** — Mono + Mission Planner with sanitized launch wrapper
+- **Mission Planner** — Mono runtime + Mission Planner with sanitized launch wrapper
 - **ArduPilot + SITL** — clones the repo, runs official prereqs, builds SITL ArduCopter
-- **Autonomy project** — unpacks a drone-autonomy starter kit, creates venv, installs deps, runs tests
-- **Wireshark** — Wireshark + tshark, pre-configured for non-root packet capture
-
-Total runtime: **30–60 minutes**, mostly unattended.
+- **Autonomy starter kit** — Python autonomy framework with FC adapter and SITL test scripts
+- **Wireshark** — Wireshark + tshark for MAVLink protocol debugging
 
 ## Quick start
 
 ```bash
+git clone https://github.com/RedactedIndustries/Hangar.git
+cd Hangar
 chmod +x hangar.sh
 ./hangar.sh
 ```
 
-That's it. Pick option 1 from the menu for a full install, walk away, come back to a working dev environment.
+Pick option 1 from the menu for a full install. Walk away. Come back to a working dev environment.
 
 To set git identity at install time:
 
@@ -55,13 +53,11 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" ./hangar.sh
 
 ## Requirements
 
-- **Ubuntu 24.04 LTS Desktop** (recommended) or **Ubuntu 22.04 LTS**
-- **Sudo access** — you'll be prompted once at the start; credentials are cached for the duration
-- **Internet access** — required for package downloads and ArduPilot source clone
-- **~10 GB free disk in `$HOME`** — ArduPilot source + build artifacts are heavy
-- **Bash 4+** — the script uses associative arrays
-
-Tested on Ubuntu Desktop running as a VMware Workstation guest. Should work on any cloud Ubuntu or bare-metal install.
+- **Ubuntu 24.04 LTS** (recommended) or **Ubuntu 22.04 LTS**, Desktop edition
+- **Sudo access** — prompted once at the start; credentials cached for the run
+- **Internet access** — for package downloads and the ArduPilot source clone
+- **~10 GB free disk in `$HOME`** — ArduPilot's build artifacts are heavy
+- **Bash 4+** — uses associative arrays
 
 ## Menu overview
 
@@ -80,8 +76,6 @@ Main Menu
   q)  Quit
 ```
 
-### Phase selection
-
 Phases run in dependency order. Each is independently selectable and individually idempotent — re-running any phase is safe.
 
 | # | Phase | Approximate runtime |
@@ -99,47 +93,40 @@ Phases run in dependency order. Each is independently selectable and individuall
 
 ## Configuration
 
-Hangar reads its configuration from environment variables. All are optional with sensible defaults:
+All optional. Set inline or interactively from the Settings menu (option 5).
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `GIT_NAME` | _(unset)_ | git user.name to set globally |
 | `GIT_EMAIL` | _(unset)_ | git user.email to set globally |
 | `ARDUPILOT_DIR` | `$HOME/ardupilot` | Where to clone ArduPilot |
-| `TOOLS_DIR` | `$HOME/tools` | Where to install QGC, Mission Planner |
+| `TOOLS_DIR` | `$HOME/tools` | Where to install QGC and Mission Planner |
 | `PROJECTS_DIR` | `$HOME/projects` | Where to unpack the autonomy starter kit |
-| `AUTONOMY_TARBALL` | `$HOME/Downloads/drone-autonomy-starter.tar.gz` | Path to optional starter kit tarball |
+| `AUTONOMY_TARBALL` | `$HOME/Downloads/drone-autonomy-starter.tar.gz` | Override tarball path |
+| `AUTONOMY_TARBALL_URL` | GitHub raw URL | Override tarball download source |
 | `NO_COLOR` | _(unset)_ | Set to disable ANSI color codes |
 
-Set any of these inline before `./hangar.sh`, or change them interactively from the Settings menu (option 5).
+## State tracking
 
-## State tracking and idempotency
+Hangar tracks completed phases in `~/.hangar-state`. The status screen shows what's done, and the custom-install menu lets you skip installed phases and re-run only what failed.
 
-Hangar tracks completed phases in `~/.hangar-state`. The status screen reflects this, and the custom-install menu shows installed phases with timestamps so you can skip what's done and re-run only what failed.
-
-Every phase is idempotent — running Hangar twice on a working install is a no-op. Re-running after a partial failure picks up where things stopped.
+Every phase is idempotent. Re-running Hangar on a working install is a no-op.
 
 ### Recovering from a partial install
 
 ```bash
-# See what's done
 ./hangar.sh
-# → choose option 4 (Show status)
-
-# Re-run only the unfinished phases
-./hangar.sh
-# → choose option 2 (Custom install)
-# → press 'u' to unselect everything already installed
-# → press 'r' to run remaining phases
+# → option 2 (Custom install)
+# → press 'u' to unselect installed phases
+# → press 'r' to run what remains
 ```
 
 ## Post-install
 
-After Hangar finishes, two things are required:
+Two things you should do after Hangar finishes:
 
-1. **Log out and back in.** Required for the `dialout` and `wireshark` group memberships to take effect, and for `sim_vehicle.py` to appear on PATH in new shells.
-
-2. **Take a VM snapshot.** In VMware: `VM → Snapshot → Take Snapshot`. Name it "clean dev environment." This is your rollback point if anything ever breaks.
+1. **Log out and back in.** Required for `dialout` and `wireshark` group membership and for `sim_vehicle.py` to appear on PATH in new shells.
+2. **Take a VM snapshot.** Name it "clean dev environment." This is your rollback point if anything ever breaks.
 
 ### Verify the install
 
@@ -154,51 +141,34 @@ source .venv/bin/activate
 python scripts/sitl_test_takeoff.py
 ```
 
-If the simulated drone arms, takes off to 10m, hovers, and lands, your environment is fully functional.
+If the simulated drone arms, climbs to 10m, hovers, and lands, your environment is fully functional.
 
 ## Hardware target
 
-Hangar is built for a specific reference build, but the resulting environment supports any ArduPilot-compatible platform.
-
-The reference build:
-
-- **Companion computer:** Raspberry Pi 5 8 GB + AI Hat+ (Hailo-8, 26 TOPS)
-- **Flight controller:** Any ArduCopter 4.6+ compatible H7-class board
-- **Comms:** SiK telemetry (915 MHz) + ELRS RC link
-- **Sensors:** Optical flow + rangefinder for GPS-denied flight
-
-Resulting dev environment works equally well for Pixhawk, CubePilot, Holybro, MicoAir, and any other ArduPilot-supported FC.
+Built for a Raspberry Pi 5 8GB + AI Hat+ companion computer talking to an H7-class ArduCopter flight controller, with SiK telemetry and ELRS RC. The dev environment works equally well for any ArduPilot-supported FC — Pixhawk, CubePilot, Holybro, MicoAir, etc.
 
 ## Troubleshooting
 
-### "curl: command not found" during preflight
-
-Fixed in v0.2.1. Hangar now bootstraps curl + wget + ca-certificates before the network check. If you see this error, upgrade to the latest `hangar.sh` or manually install:
+**`curl: command not found` during preflight.** Hangar bootstraps curl automatically, but if you hit this on an older version:
 
 ```bash
 sudo apt update && sudo apt install -y curl wget ca-certificates
 ./hangar.sh
 ```
 
-### "sim_vehicle.py: command not found" after install
-
-You need to log out and back in. The ArduPilot install script appends to `~/.profile`, which is only sourced on login. Alternatively:
+**`sim_vehicle.py: command not found` after install.** Log out and back in, or:
 
 ```bash
 . ~/.profile
 ```
 
-### Mission Planner shows rendering glitches under Mono
-
-Use the included wrapper script that sets the right Mono environment:
+**Mission Planner rendering glitches under Mono.** Use the included wrapper:
 
 ```bash
 ~/tools/mission-planner/run-mp.sh
 ```
 
-### ArduPilot build fails with "submodule not found"
-
-Submodule fetch interrupted. Manually retry:
+**ArduPilot build fails with "submodule not found".** Submodule fetch interrupted. Retry:
 
 ```bash
 cd ~/ardupilot
@@ -207,93 +177,11 @@ git submodule update --init --recursive
 ./waf copter
 ```
 
-### Logs
-
-Every run appends to `~/hangar-install.log`. When something fails, that's the first place to look. Tail it directly:
-
-```bash
-tail -f ~/hangar-install.log
-```
-
-Or use the in-menu log viewer (option 6).
-
-## Project structure
-
-```
-hangar.sh                            # the installer
-├── preflight                        # OS detection, network check, sudo cache
-├── phase_system_update              # apt full-upgrade + build tools
-├── phase_vmtools                    # hypervisor detection + guest tools
-├── phase_dev_tools                  # git, python, vim, etc.
-├── phase_vscode                     # VS Code + extensions
-├── phase_qgc                        # QGroundControl AppImage
-├── phase_mission_planner            # Mono + Mission Planner
-├── phase_ardupilot                  # clone + prereqs + SITL build
-├── phase_autonomy_project           # unpack starter kit, install Python deps
-├── phase_wireshark                  # Wireshark + capture group
-└── phase_finalize                   # UFW disable, summary
-
-~/hangar-install.log                 # full run log
-~/.hangar-state                      # which phases have completed
-```
-
-## Companion project
-
-Hangar is designed to install the [drone-autonomy starter kit](#) — a Python autonomy framework targeting Pi 5 + AI Hat+ + ArduCopter. If you drop the starter tarball at `~/Downloads/drone-autonomy-starter.tar.gz` before running Hangar, it'll be unpacked, set up with a virtualenv, and tested automatically during the Autonomy Project phase.
-
-Hangar works fine without the starter kit — the phase becomes a no-op if the tarball isn't present.
-
-## Design principles
-
-**Idempotent.** Every phase checks before acting. Re-running is always safe.
-
-**Loud failures, quiet successes.** Errors stop the run with a clear message. Routine output goes to the log file, not the terminal.
-
-**No silent assumptions.** State is tracked and exposed. The user can see what's been done and choose what to do next.
-
-**Composable.** Each phase is a function that can be called individually or as part of any combination.
-
-**No magic.** Every dependency is installed from its upstream source (Microsoft's apt repo for VS Code, ArduPilot's official installer for the dev environment, etc.). No private mirrors, no curl-piped-to-bash from unknown URLs.
-
-## Changelog
-
-### v0.2.1 (current)
-
-- **Fixed:** preflight curl/wget bootstrap. Fresh Ubuntu installs don't always have curl; Hangar now installs it before the network check
-- **Fixed:** sudo caching now happens before bootstrap step, so the password prompt is at the very start
-- **Improved:** network check falls back to wget if curl is unavailable
-
-### v0.2.0
-
-- Initial menu-driven release
-- Replaces the linear v0.1.x install scripts
-- State tracking via `~/.hangar-state`
-- Phase-selectable custom install
-- Auto-detects hypervisor for VM tools
-
-## Contributing
-
-This is a single-file bash script by design — easy to read, easy to modify, easy to audit. If you want to add a phase:
-
-1. Add the phase ID to the `PHASE_IDS` array
-2. Add a friendly name to `PHASE_NAME`
-3. Add a description to `PHASE_DESC`
-4. Add a duration estimate to `PHASE_DURATION`
-5. Write a `phase_<id>()` function with the install logic
-
-That's it. The menu and state tracking pick it up automatically.
-
-Lint with shellcheck before submitting changes:
-
-```bash
-shellcheck -S warning hangar.sh
-```
+**Logs.** Every run appends to `~/hangar-install.log`. Tail it directly or use option 6 in the menu.
 
 ## License
 
-MIT License. Copyright © 2026 Redacted Industries LLC.
-
-See the script header for the full license text. Attribution is required; commercial use is permitted.
+MIT. Copyright © 2026 Redacted Industries LLC.
 
 ```
 SPDX-License-Identifier: MIT
@@ -301,7 +189,7 @@ SPDX-License-Identifier: MIT
 
 ## Why "Hangar"?
 
-A hangar is where you check your aircraft over carefully before flying. Lights on, engines off, walking around with a clipboard. Tightening bolts, topping off fluids, verifying everything is where it should be.
+A hangar is where you check your aircraft over before flying. Lights on, engines off, walking around with a clipboard. Tightening bolts, topping off fluids, verifying everything is where it should be.
 
 That's what this script does — gets your dev environment thoroughly checked out and ready before you start writing code that flies real hardware.
 

@@ -41,8 +41,13 @@
 
 set -euo pipefail
 
-HANGAR_VERSION="0.2.1"
+HANGAR_VERSION="0.3.0"
 HANGAR_AUTHOR="Redacted Industries LLC"
+
+# Resolve the directory this script lives in, even if invoked via symlink or
+# from another working directory. Used as the primary lookup location for
+# bundled files (e.g., the autonomy starter tarball).
+HANGAR_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # -----------------------------------------------------------------------------
 # Configuration (override via env vars)
@@ -52,7 +57,9 @@ HANGAR_AUTHOR="Redacted Industries LLC"
 : "${ARDUPILOT_DIR:=$HOME/ardupilot}"
 : "${TOOLS_DIR:=$HOME/tools}"
 : "${PROJECTS_DIR:=$HOME/projects}"
+# Tarball lookup is layered: same-dir as script, ~/Downloads, then GitHub.
 : "${AUTONOMY_TARBALL:=$HOME/Downloads/drone-autonomy-starter.tar.gz}"
+: "${AUTONOMY_TARBALL_URL:=https://raw.githubusercontent.com/RedactedIndustries/Hangar/main/drone-autonomy-starter.tar.gz}"
 
 LOG_FILE="$HOME/hangar-install.log"
 STATE_FILE="$HOME/.hangar-state"
@@ -127,7 +134,7 @@ declare -A PHASE_DESC=(
     [qgc]="QGroundControl AppImage + Qt deps + dialout group"
     [mission_planner]="Mono runtime + Mission Planner (Windows GCS on Linux)"
     [ardupilot]="Clone ArduPilot, install prereqs, build SITL ArduCopter (~15 min)"
-    [autonomy_project]="Unpack starter kit, create venv, install deps, run tests"
+    [autonomy_project]="Install drone-autonomy starter kit (bundled or downloaded), create venv"
     [wireshark]="Wireshark + tshark for MAVLink protocol debugging"
     [finalize]="Disable UFW, print version summary"
 )
@@ -407,6 +414,7 @@ show_settings() {
     say "  ${CYAN}4${NC}) Tools directory       ${DIM}current: ${TOOLS_DIR}${NC}"
     say "  ${CYAN}5${NC}) Projects directory    ${DIM}current: ${PROJECTS_DIR}${NC}"
     say "  ${CYAN}6${NC}) Autonomy tarball path ${DIM}current: ${AUTONOMY_TARBALL}${NC}"
+    say "  ${CYAN}7${NC}) Autonomy tarball URL  ${DIM}current: ${AUTONOMY_TARBALL_URL}${NC}"
     say ""
     say "  ${CYAN}b${NC}) Back to main menu"
     say ""
@@ -421,6 +429,7 @@ show_settings() {
         4) read -r -p "  Tools dir: " TOOLS_DIR ;;
         5) read -r -p "  Projects dir: " PROJECTS_DIR ;;
         6) read -r -p "  Tarball path: " AUTONOMY_TARBALL ;;
+        7) read -r -p "  Tarball URL: " AUTONOMY_TARBALL_URL ;;
         b|B) return ;;
     esac
     show_settings
@@ -872,13 +881,71 @@ phase_autonomy_project() {
 
     if [[ -d "$project_dir" ]]; then
         ok "drone-autonomy project already exists at $project_dir"
-    elif [[ -f "$AUTONOMY_TARBALL" ]]; then
-        step "Unpacking $AUTONOMY_TARBALL to $PROJECTS_DIR"
-        tar xzf "$AUTONOMY_TARBALL" -C "$PROJECTS_DIR"
     else
-        warn "Autonomy tarball not found at $AUTONOMY_TARBALL"
-        warn "Drop it there and re-run this phase."
-        return 0
+        # Locate the tarball. Lookup order:
+        #   1. Same directory as this script (works when user cloned the repo)
+        #   2. The $AUTONOMY_TARBALL path (typically ~/Downloads, for backward compat)
+        #   3. Download from $AUTONOMY_TARBALL_URL as a last resort
+        local bundled_tarball="$HANGAR_SCRIPT_DIR/drone-autonomy-starter.tar.gz"
+        local effective_tarball=""
+
+        if [[ -f "$bundled_tarball" ]]; then
+            info "Found bundled tarball next to script: $bundled_tarball"
+            effective_tarball="$bundled_tarball"
+        elif [[ -f "$AUTONOMY_TARBALL" ]]; then
+            info "Using tarball at: $AUTONOMY_TARBALL"
+            effective_tarball="$AUTONOMY_TARBALL"
+        else
+            step "No local tarball found, downloading from GitHub"
+            info "Source: $AUTONOMY_TARBALL_URL"
+            mkdir -p "$(dirname "$AUTONOMY_TARBALL")"
+
+            local download_ok=0
+            if command -v curl &>/dev/null; then
+                # shellcheck disable=SC2024
+                if curl -fsSL --retry 3 --max-time 60 \
+                        -o "$AUTONOMY_TARBALL" "$AUTONOMY_TARBALL_URL" \
+                        >>"$LOG_FILE" 2>&1; then
+                    download_ok=1
+                fi
+            fi
+            if [[ "$download_ok" -eq 0 ]] && command -v wget &>/dev/null; then
+                # shellcheck disable=SC2024
+                if wget -q --tries=3 --timeout=60 \
+                        -O "$AUTONOMY_TARBALL" "$AUTONOMY_TARBALL_URL" \
+                        >>"$LOG_FILE" 2>&1; then
+                    download_ok=1
+                fi
+            fi
+
+            if [[ "$download_ok" -ne 0 ]] && [[ -s "$AUTONOMY_TARBALL" ]]; then
+                ok "Downloaded to $AUTONOMY_TARBALL"
+                effective_tarball="$AUTONOMY_TARBALL"
+            else
+                rm -f "$AUTONOMY_TARBALL"
+                warn "Failed to download starter kit. Skipping autonomy project setup."
+                warn "  - Check the URL: $AUTONOMY_TARBALL_URL"
+                warn "  - Or place the tarball next to hangar.sh and re-run this phase."
+                return 0
+            fi
+        fi
+
+        # Validate the tarball before unpacking — catches HTML 404 pages
+        # that got saved as if they were tarballs.
+        if ! tar -tzf "$effective_tarball" >/dev/null 2>&1; then
+            err "File at $effective_tarball is not a valid gzipped tar archive."
+            err "Inspect it manually — it may be an HTML error page."
+            return 1
+        fi
+
+        step "Unpacking $effective_tarball to $PROJECTS_DIR"
+        tar xzf "$effective_tarball" -C "$PROJECTS_DIR"
+
+        if [[ ! -d "$project_dir" ]]; then
+            err "Tarball extracted but $project_dir not found."
+            err "The archive may have a different layout than expected."
+            return 1
+        fi
     fi
 
     if [[ ! -d "$project_dir/.venv" ]]; then
