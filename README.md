@@ -20,7 +20,7 @@
 
 ---
 
-**Hangar** is a menu-driven installer that turns a fresh Ubuntu install into a complete drone autonomy development environment in one command. From a clean ISO to flying a simulated drone in SITL with a working Python autonomy stack — typically 30–60 minutes, mostly unattended.
+**Hangar** is a menu-driven installer that turns a fresh Ubuntu install into a complete drone autonomy development environment in one command. From a clean ISO to flying a simulated drone in SITL, typically 30 to 60 minutes, mostly unattended.
 
 ## What it installs
 
@@ -54,10 +54,9 @@ GIT_NAME="Your Name" GIT_EMAIL="you@example.com" ./hangar.sh
 ## Requirements
 
 - **Ubuntu 24.04 LTS** (recommended) or **Ubuntu 22.04 LTS**, Desktop edition
-- **Sudo access** — prompted once at the start; credentials cached for the run
-- **Internet access** — for package downloads and the ArduPilot source clone
-- **~10 GB free disk in `$HOME`** — ArduPilot's build artifacts are heavy
-- **Bash 4+** — uses associative arrays
+- Sudo access (you'll be prompted at the start)
+- Internet connection
+- ~10 GB free disk in `$HOME`
 
 ## Menu overview
 
@@ -76,20 +75,7 @@ Main Menu
   q)  Quit
 ```
 
-Phases run in dependency order. Each is independently selectable and individually idempotent — re-running any phase is safe.
-
-| # | Phase | Approximate runtime |
-|---|---|---|
-| 1 | System Updates | 5–15 min |
-| 2 | VM Guest Tools | 1–2 min |
-| 3 | Developer Tools | 2–3 min |
-| 4 | Visual Studio Code | 2–3 min |
-| 5 | QGroundControl | 2–3 min |
-| 6 | Mission Planner | 3–5 min |
-| 7 | ArduPilot + SITL | 15–25 min |
-| 8 | Autonomy Project | 1–2 min |
-| 9 | Wireshark | 1–2 min |
-| 10 | Finalize | < 1 min |
+Phases run in dependency order. Each is independently selectable and individually idempotent. Re-running any phase is safe.
 
 ## Configuration
 
@@ -102,8 +88,6 @@ All optional. Set inline or interactively from the Settings menu (option 5).
 | `ARDUPILOT_DIR` | `$HOME/ardupilot` | Where to clone ArduPilot |
 | `TOOLS_DIR` | `$HOME/tools` | Where to install QGC and Mission Planner |
 | `PROJECTS_DIR` | `$HOME/projects` | Where to unpack the autonomy starter kit |
-| `AUTONOMY_TARBALL` | `$HOME/Downloads/drone-autonomy-starter.tar.gz` | Override tarball path |
-| `AUTONOMY_TARBALL_URL` | GitHub raw URL | Override tarball download source |
 | `NO_COLOR` | _(unset)_ | Set to disable ANSI color codes |
 
 ## State tracking
@@ -112,27 +96,18 @@ Hangar tracks completed phases in `~/.hangar-state`. The status screen shows wha
 
 Every phase is idempotent. Re-running Hangar on a working install is a no-op.
 
-### Recovering from a partial install
-
-```bash
-./hangar.sh
-# → option 2 (Custom install)
-# → press 'u' to unselect installed phases
-# → press 'r' to run what remains
-```
-
 ## Post-install
 
-Two things you should do after Hangar finishes:
+Three things you should do after Hangar finishes:
 
-1. **Log out and back in.** Required for `dialout` and `wireshark` group membership and for `sim_vehicle.py` to appear on PATH in new shells.
-2. **Take a VM snapshot.** Name it "clean dev environment." This is your rollback point if anything ever breaks.
+1. **Open a new terminal** (or `source ~/.bashrc` in your current one) to pick up the ArduPilot PATH updates.
+2. **Log out and back in once.** Required for `dialout` and `wireshark` group memberships to take effect.
+3. **Take a VM snapshot.** Name it "clean dev environment." This is your rollback point if anything ever breaks.
 
 ### Verify the install
 
 ```bash
 # Terminal 1 — start SITL
-cd ~/ardupilot
 sim_vehicle.py -v ArduCopter --console --map --out=udp:127.0.0.1:14551
 
 # Terminal 2 — run the smoke test
@@ -149,17 +124,10 @@ Built for a Raspberry Pi 5 8GB + AI Hat+ companion computer talking to an H7-cla
 
 ## Troubleshooting
 
-**`curl: command not found` during preflight.** Hangar bootstraps curl automatically, but if you hit this on an older version:
+**`sim_vehicle.py: command not found` after install.** Open a new terminal, or reload bashrc in your current one:
 
 ```bash
-sudo apt update && sudo apt install -y curl wget ca-certificates
-./hangar.sh
-```
-
-**`sim_vehicle.py: command not found` after install.** Log out and back in, or:
-
-```bash
-. ~/.profile
+source ~/.bashrc
 ```
 
 **Mission Planner rendering glitches under Mono.** Use the included wrapper:
@@ -177,8 +145,6 @@ git submodule update --init --recursive
 ./waf copter
 ```
 
-**Logs.** Every run appends to `~/hangar-install.log`. Tail it directly or use option 6 in the menu.
-
 ## License
 
 MIT. Copyright © 2026 Redacted Industries LLC.
@@ -191,7 +157,7 @@ SPDX-License-Identifier: MIT
 
 A hangar is where you check your aircraft over before flying. Lights on, engines off, walking around with a clipboard. Tightening bolts, topping off fluids, verifying everything is where it should be.
 
-That's what this script does — gets your dev environment thoroughly checked out and ready before you start writing code that flies real hardware.
+That's what this script does. It gets your dev environment thoroughly checked out and ready before you start writing code that flies real hardware.
 
 ---
 
