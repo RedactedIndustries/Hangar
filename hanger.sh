@@ -41,7 +41,7 @@
 
 set -euo pipefail
 
-HANGAR_VERSION="0.3.0"
+HANGAR_VERSION="0.3.1"
 HANGAR_AUTHOR="Redacted Industries LLC"
 
 # Resolve the directory this script lives in, even if invoked via symlink or
@@ -873,6 +873,71 @@ phase_ardupilot() {
         err "SITL build appeared to succeed but binary not found"
         return 1
     fi
+
+    # Clean up shell environment so SITL tools work in every terminal.
+    #
+    # The ArduPilot prereqs installer writes PATH and venv-activation lines to
+    # ~/.profile, but Ubuntu GNOME desktops do NOT source .profile in terminals
+    # opened from the GUI — only in login shells. The result: users open a
+    # terminal after install and `sim_vehicle.py` is "command not found."
+    # We fix this by also writing the relevant lines to .bashrc, where every
+    # interactive shell will pick them up.
+    fix_ardupilot_shell_env
+}
+
+# Ensure ArduPilot's PATH is available in every terminal, and clean up the
+# noise the installer leaves behind. Idempotent.
+fix_ardupilot_shell_env() {
+    step "Fixing shell environment for ArduPilot tools"
+
+    local autotest_path="$ARDUPILOT_DIR/Tools/autotest"
+    local completion_path="$ARDUPILOT_DIR/Tools/completion/completion.bash"
+    local bashrc="$HOME/.bashrc"
+    local profile="$HOME/.profile"
+    local marker="# >>> Hangar: ArduPilot shell setup >>>"
+    local marker_end="# <<< Hangar: ArduPilot shell setup <<<"
+
+    # 1) De-duplicate ~/.profile. The installer can append the same venv-
+    #    activation line multiple times if it runs more than once.
+    if [[ -f "$profile" ]]; then
+        local tmpfile
+        tmpfile=$(mktemp)
+        awk '!seen[$0]++' "$profile" > "$tmpfile" && mv "$tmpfile" "$profile"
+        log "  Deduplicated ~/.profile"
+    fi
+
+    # 2) Disable auto-activation of the ArduPilot venv on shell startup.
+    #    Having it activate automatically in every terminal interferes with
+    #    other Python projects (the user's drone-autonomy venv, for example).
+    #    The user can still activate it explicitly when working on ArduPilot
+    #    development.
+    if [[ -f "$profile" ]] && grep -q "source.*venv-ardupilot/bin/activate" "$profile"; then
+        sed -i 's|^source.*venv-ardupilot/bin/activate|# &  # disabled by Hangar — activate manually when needed|' "$profile"
+        log "  Disabled auto-activation of venv-ardupilot in ~/.profile"
+    fi
+
+    # 3) Make ArduPilot tools available in every interactive shell.
+    #    Add a clearly-marked block to ~/.bashrc.
+    if [[ ! -f "$bashrc" ]] || ! grep -qF "$marker" "$bashrc"; then
+        {
+            echo ""
+            echo "$marker"
+            echo "# Added by Hangar v${HANGAR_VERSION} to ensure ArduPilot tools"
+            echo "# are on PATH in every terminal (Ubuntu Desktop does not"
+            echo "# source ~/.profile for GUI-launched terminals)."
+            echo "if [ -d \"$autotest_path\" ] && [[ \":\$PATH:\" != *\":$autotest_path:\"* ]]; then"
+            echo "    export PATH=\"$autotest_path:\$PATH\""
+            echo "fi"
+            echo "if [ -f \"$completion_path\" ]; then"
+            echo "    # shellcheck disable=SC1090"
+            echo "    source \"$completion_path\""
+            echo "fi"
+            echo "$marker_end"
+        } >> "$bashrc"
+        ok "Added ArduPilot PATH to ~/.bashrc"
+    else
+        log "  ArduPilot PATH already present in ~/.bashrc"
+    fi
 }
 
 phase_autonomy_project() {
@@ -1067,10 +1132,11 @@ run_selected_phases() {
         say "${BOLD}${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
         say ""
         say "  ${BOLD}Next steps:${NC}"
-        say "    ${CYAN}1.${NC} Log out and back in (for group changes + PATH updates)"
-        say "    ${CYAN}2.${NC} Take a VM snapshot (call it 'clean dev environment')"
-        say "    ${CYAN}3.${NC} Launch SITL: ${DIM}cd $ARDUPILOT_DIR && sim_vehicle.py -v ArduCopter --console --map${NC}"
-        say "    ${CYAN}4.${NC} Run the smoke test: ${DIM}python scripts/sitl_test_takeoff.py${NC}"
+        say "    ${CYAN}1.${NC} Open a ${BOLD}new terminal${NC} (or run ${DIM}source ~/.bashrc${NC}) to pick up PATH updates"
+        say "    ${CYAN}2.${NC} Log out and back in once (for ${DIM}dialout${NC} and ${DIM}wireshark${NC} group memberships)"
+        say "    ${CYAN}3.${NC} Take a VM snapshot (call it 'clean dev environment')"
+        say "    ${CYAN}4.${NC} Launch SITL: ${DIM}sim_vehicle.py -v ArduCopter --console --map --out=udp:127.0.0.1:14551${NC}"
+        say "    ${CYAN}5.${NC} Run the smoke test: ${DIM}cd $PROJECTS_DIR/drone-autonomy && source .venv/bin/activate && python scripts/sitl_test_takeoff.py${NC}"
     else
         say "${BOLD}${YELLOW}Completed with errors${NC}"
         say ""
